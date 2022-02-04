@@ -22,4 +22,4 @@ jobs:
       - run: npm i -g firebase-tools
 
       - run: npm run build
-      - run: firebase deploy --non-interactive --token "${{ secrets.FIREBASE_TOKEN }}" --project "${{ secrets.FIREBASE_PROJECT }}" --only functions -f
+      - run: npm run deploy -- -f --non-interactive --token "${{ secrets.FIREBASE_TOKEN }}" --project "${{ secrets.FIREBASE_PROJECT }}"
