@@ -17,7 +17,7 @@ export const pubSubDeletionRoutine = getDeletionRoutineFunction({
 export const deviceShareDeletionRoutine = pubsub.schedule('every 1 hours').onRun(async () => {
   const db = admin.firestore()
   const query = db.collection('device-stream-shares')
-    .where('expiresAt', '<', admin.firestore.FieldValue.serverTimestamp())
+    .where('expiresAt', '<', admin.firestore.Timestamp.now())
     .orderBy('expiresAt')
     .limit(100)
 
