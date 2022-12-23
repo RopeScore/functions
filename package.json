@@ -20,7 +20,7 @@
   },
   "main": "dist/index.js",
   "dependencies": {
-    "firebase-admin": "^11.0.0",
+    "firebase-admin": "^11.4.1",
     "firebase-functions": "^4.1.0",
     "graphql-firebase-subscriptions": "^2.0.0"
   },
