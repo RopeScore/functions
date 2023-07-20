@@ -57,16 +57,19 @@ async function deleteQueryBatch (db: admin.firestore.Firestore, query: admin.fir
   const batchSize = snapshot.size
   if (batchSize === 0) {
     // When there are no documents left, we are done
+    console.log('Firestore: no docs to delete')
     resolve()
     return
   }
 
   // Delete documents in a batch
+  console.log(`Firestore: (${snapshot.readTime.toMillis()}) deleting ${batchSize} docs`)
   const batch = db.batch()
   snapshot.docs.forEach(doc => {
     batch.delete(doc.ref)
   })
   await batch.commit()
+  console.log(`Firestore: (${snapshot.readTime.toMillis()}) deleted ${batchSize} docs`)
 
   // Recurse on the next process tick, to avoid
   // exploding the stack.
@@ -85,8 +88,10 @@ async function deleteRTDBBatch (db: admin.database.Database, query: admin.databa
     return
   }
 
+  console.log(`RTDB: deleting ${batchSize} nodes from ${snapshot.ref.key}`)
   const data = snapshot.val()
-  await snapshot.ref.update(Object.fromEntries(Object.entries(data).map(k => [k, null])))
+  await snapshot.ref.update(Object.fromEntries(Object.keys(data).map(k => [k, null])))
+  console.log('RTDB: deleted batch')
 
   // Recurse on the next process tick, to avoid
   // exploding the stack.
