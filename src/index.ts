@@ -17,16 +17,14 @@ export const pubSubDeletionRoutine = pubsub.schedule('every 10 minutes').onRun(a
     const topics = Object.values(RsEvents)
 
     for (const topic of topics) {
-      const ref = baseRef.child(topic.toString())
-      const toDelete = await ref
+      const query = baseRef.child(topic.toString())
         .orderByChild('timestamp')
         .endAt(Date.now() - (10 * 60 * 1000))
-        .get()
+        .limitToFirst(1000)
 
-      if (toDelete.exists()) {
-        const data = toDelete.val()
-        await ref.update(Object.fromEntries(Object.entries(data).map(k => [k, null])))
-      }
+      await new Promise<void>((resolve, reject) => {
+        deleteRTDBBatch(db, query, resolve).catch(reject)
+      })
     }
   } catch (err) {
     console.error(err)
@@ -74,5 +72,25 @@ async function deleteQueryBatch (db: admin.firestore.Firestore, query: admin.fir
   // exploding the stack.
   process.nextTick(() => {
     void deleteQueryBatch(db, query, resolve)
+  })
+}
+
+async function deleteRTDBBatch (db: admin.database.Database, query: admin.database.Query, resolve: () => void) {
+  const snapshot = await query.get()
+
+  const batchSize = snapshot.numChildren()
+  if (batchSize === 0) {
+    // When there are no documents left, we are done
+    resolve()
+    return
+  }
+
+  const data = snapshot.val()
+  await snapshot.ref.update(Object.fromEntries(Object.entries(data).map(k => [k, null])))
+
+  // Recurse on the next process tick, to avoid
+  // exploding the stack.
+  process.nextTick(() => {
+    void deleteRTDBBatch(db, query, resolve)
   })
 }
