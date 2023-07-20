@@ -1,5 +1,5 @@
 import * as admin from 'firebase-admin'
-import { pubsub } from 'firebase-functions'
+import { pubsub, logger } from 'firebase-functions'
 // import getDeletionRoutineFunction from 'graphql-firebase-subscriptions/firebase-function'
 admin.initializeApp()
 
@@ -27,7 +27,7 @@ export const pubSubDeletionRoutine = pubsub.schedule('every 10 minutes').onRun(a
       })
     }
   } catch (err) {
-    console.error(err)
+    logger.error(err)
   }
 })
 
@@ -47,7 +47,7 @@ export const deviceShareDeletionRoutine = pubsub.schedule('every 1 hours').onRun
       deleteQueryBatch(db, query, resolve).catch(reject)
     })
   } catch (err) {
-    console.error(err)
+    logger.error(err)
   }
 })
 
@@ -57,19 +57,19 @@ async function deleteQueryBatch (db: admin.firestore.Firestore, query: admin.fir
   const batchSize = snapshot.size
   if (batchSize === 0) {
     // When there are no documents left, we are done
-    console.log('Firestore: no docs to delete')
+    logger.info('Firestore: no docs to delete')
     resolve()
     return
   }
 
   // Delete documents in a batch
-  console.log(`Firestore: (${snapshot.readTime.toMillis()}) deleting ${batchSize} docs`)
+  logger.info(`Firestore: (${snapshot.readTime.toMillis()}) deleting ${batchSize} docs`)
   const batch = db.batch()
   snapshot.docs.forEach(doc => {
     batch.delete(doc.ref)
   })
   await batch.commit()
-  console.log(`Firestore: (${snapshot.readTime.toMillis()}) deleted ${batchSize} docs`)
+  logger.info(`Firestore: (${snapshot.readTime.toMillis()}) deleted ${batchSize} docs`)
 
   // Recurse on the next process tick, to avoid
   // exploding the stack.
@@ -88,10 +88,10 @@ async function deleteRTDBBatch (db: admin.database.Database, query: admin.databa
     return
   }
 
-  console.log(`RTDB: deleting ${batchSize} nodes from ${snapshot.ref.key}`)
+  logger.info(`RTDB: deleting ${batchSize} nodes from ${snapshot.ref.key}`)
   const data = snapshot.val()
   await snapshot.ref.update(Object.fromEntries(Object.keys(data).map(k => [k, null])))
-  console.log('RTDB: deleted batch')
+  logger.info('RTDB: deleted batch')
 
   // Recurse on the next process tick, to avoid
   // exploding the stack.
