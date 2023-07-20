@@ -1,6 +1,6 @@
 import * as admin from 'firebase-admin'
 import { pubsub } from 'firebase-functions'
-import getDeletionRoutineFunction from 'graphql-firebase-subscriptions/firebase-function'
+// import getDeletionRoutineFunction from 'graphql-firebase-subscriptions/firebase-function'
 admin.initializeApp()
 
 export enum RsEvents {
@@ -10,20 +10,47 @@ export enum RsEvents {
   SCORESHEET_CHANGED = 'SCORESHEET_CHANGED'
 }
 
-export const pubSubDeletionRoutine = getDeletionRoutineFunction({
-  topics: RsEvents
+export const pubSubDeletionRoutine = pubsub.schedule('every 10 minutes').onRun(async () => {
+  try {
+    const db = admin.database()
+    const baseRef = db.ref('/graphql-firebase-subscriptions')
+    const topics = Object.values(RsEvents)
+
+    for (const topic of topics) {
+      const ref = baseRef.child(topic.toString())
+      const toDelete = await ref
+        .orderByChild('timestamp')
+        .endAt(Date.now() - (10 * 60 * 1000))
+        .get()
+
+      if (toDelete.exists()) {
+        const data = toDelete.val()
+        await ref.update(Object.fromEntries(Object.entries(data).map(k => [k, null])))
+      }
+    }
+  } catch (err) {
+    console.error(err)
+  }
 })
 
-export const deviceShareDeletionRoutine = pubsub.schedule('every 1 hours').onRun(async () => {
-  const db = admin.firestore()
-  const query = db.collection('device-stream-shares')
-    .where('expiresAt', '<', admin.firestore.Timestamp.now())
-    .orderBy('expiresAt')
-    .limit(100)
+// export const pubSubDeletionRoutine = getDeletionRoutineFunction({
+//   topics: RsEvents
+// })
 
-  return new Promise<void>((resolve, reject) => {
-    deleteQueryBatch(db, query, resolve).catch(reject)
-  })
+export const deviceShareDeletionRoutine = pubsub.schedule('every 1 hours').onRun(async () => {
+  try {
+    const db = admin.firestore()
+    const query = db.collection('device-stream-shares')
+      .where('expiresAt', '<', admin.firestore.Timestamp.now())
+      .orderBy('expiresAt')
+      .limit(100)
+
+    return new Promise<void>((resolve, reject) => {
+      deleteQueryBatch(db, query, resolve).catch(reject)
+    })
+  } catch (err) {
+    console.error(err)
+  }
 })
 
 async function deleteQueryBatch (db: admin.firestore.Firestore, query: admin.firestore.Query, resolve: () => void) {
