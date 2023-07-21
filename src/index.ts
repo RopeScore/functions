@@ -1,6 +1,6 @@
 import * as admin from 'firebase-admin'
 import { pubsub, logger } from 'firebase-functions'
-// import getDeletionRoutineFunction from 'graphql-firebase-subscriptions/firebase-function'
+import getDeletionRoutineFunction from 'graphql-firebase-subscriptions/firebase-function'
 admin.initializeApp()
 
 export enum RsEvents {
@@ -10,30 +10,9 @@ export enum RsEvents {
   SCORESHEET_CHANGED = 'SCORESHEET_CHANGED'
 }
 
-export const pubSubDeletionRoutine = pubsub.schedule('every 10 minutes').onRun(async () => {
-  try {
-    const db = admin.database()
-    const baseRef = db.ref('/graphql-firebase-subscriptions')
-    const topics = Object.values(RsEvents)
-
-    for (const topic of topics) {
-      const query = baseRef.child(topic.toString())
-        .orderByChild('timestamp')
-        .endAt(Date.now() - (10 * 60 * 1000))
-        .limitToFirst(1000)
-
-      await new Promise<void>((resolve, reject) => {
-        deleteRTDBBatch(db, query, resolve).catch(reject)
-      })
-    }
-  } catch (err) {
-    logger.error(err)
-  }
+export const pubSubDeletionRoutine = getDeletionRoutineFunction({
+  topics: RsEvents
 })
-
-// export const pubSubDeletionRoutine = getDeletionRoutineFunction({
-//   topics: RsEvents
-// })
 
 export const deviceShareDeletionRoutine = pubsub.schedule('every 1 hours').onRun(async () => {
   try {

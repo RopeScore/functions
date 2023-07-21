@@ -22,7 +22,7 @@
   "dependencies": {
     "firebase-admin": "^11.10.1",
     "firebase-functions": "^4.4.1",
-    "graphql-firebase-subscriptions": "^2.3.0"
+    "graphql-firebase-subscriptions": "^2.4.0"
   },
   "devDependencies": {
     "eslint": "^8.45.0",
