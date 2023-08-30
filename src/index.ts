@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin'
+import { DocumentSnapshot } from 'firebase-admin/firestore'
 import { pubsub, logger } from 'firebase-functions'
 import getDeletionRoutineFunction from 'graphql-firebase-subscriptions/firebase-function'
 admin.initializeApp()
@@ -20,7 +21,6 @@ export const deviceShareDeletionRoutine = pubsub.schedule('every 1 hours').onRun
     const query = db.collection('device-stream-shares')
       .where('expiresAt', '<', admin.firestore.Timestamp.now())
       .orderBy('expiresAt')
-      .limit(100)
 
     return new Promise<void>((resolve, reject) => {
       deleteQueryBatch(db, query, resolve).catch(reject)
@@ -30,13 +30,35 @@ export const deviceShareDeletionRoutine = pubsub.schedule('every 1 hours').onRun
   }
 })
 
-async function deleteQueryBatch (db: admin.firestore.Firestore, query: admin.firestore.Query, resolve: () => void) {
-  const snapshot = await query.get()
+export const rankedResultsDeletionRoutine = pubsub.schedule('every 1 hours').onRun(async () => {
+  try {
+    const db = admin.firestore()
+    const query = db.collection('ranked-results')
+      .where('versionType', '==', 'temporary')
+      .orderBy('maxEntryLockedAt', 'asc')
+      .limit(100)
 
-  const batchSize = snapshot.size
+    return new Promise<void>((resolve, reject) => {
+      deleteQueryBatch(
+        db,
+        query,
+        resolve,
+        (dSnap) => dSnap.createTime != null && dSnap.createTime.toMillis() < new Date(Date.now() - (60 * 60 * 1000)).getTime()
+      ).catch(reject)
+    })
+  } catch (err) {
+    logger.error(err)
+  }
+})
+
+async function deleteQueryBatch (db: admin.firestore.Firestore, query: admin.firestore.Query, resolve: () => void, predicate?: (dSnap: DocumentSnapshot) => boolean) {
+  const snapshot = await query.get()
+  const docs = predicate != null ? snapshot.docs.filter(dSnap => predicate(dSnap)) : snapshot.docs
+
+  const batchSize = predicate != null ? docs.length : snapshot.size
   if (batchSize === 0) {
     // When there are no documents left, we are done
-    logger.info('Firestore: no docs to delete')
+    logger.info(`Firestore: (${snapshot.readTime.toMillis()}) no docs to delete`)
     resolve()
     return
   }
@@ -44,7 +66,7 @@ async function deleteQueryBatch (db: admin.firestore.Firestore, query: admin.fir
   // Delete documents in a batch
   logger.info(`Firestore: (${snapshot.readTime.toMillis()}) deleting ${batchSize} docs`)
   const batch = db.batch()
-  snapshot.docs.forEach(doc => {
+  docs.forEach(doc => {
     batch.delete(doc.ref)
   })
   await batch.commit()
@@ -54,27 +76,5 @@ async function deleteQueryBatch (db: admin.firestore.Firestore, query: admin.fir
   // exploding the stack.
   process.nextTick(() => {
     void deleteQueryBatch(db, query, resolve)
-  })
-}
-
-async function deleteRTDBBatch (db: admin.database.Database, query: admin.database.Query, resolve: () => void) {
-  const snapshot = await query.get()
-
-  const batchSize = snapshot.numChildren()
-  if (batchSize === 0) {
-    // When there are no documents left, we are done
-    resolve()
-    return
-  }
-
-  logger.info(`RTDB: deleting ${batchSize} nodes from ${snapshot.ref.key}`)
-  const data = snapshot.val()
-  await snapshot.ref.update(Object.fromEntries(Object.keys(data).map(k => [k, null])))
-  logger.info('RTDB: deleted batch')
-
-  // Recurse on the next process tick, to avoid
-  // exploding the stack.
-  process.nextTick(() => {
-    void deleteRTDBBatch(db, query, resolve)
   })
 }
